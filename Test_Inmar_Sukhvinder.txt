@@ -1,0 +1,344 @@
+
+
+
+ ***SQL
+ You have a database with the following tables:
+ 
+ -tblDimDate-a table of dates, i.e., a calendar
+ -tblOrder-a table of 'Orders', also referred to as Campaigns-tblAdvertiserLineItem
+ -a table of 'Advertiser Line Items' (ALI for short).
+ 
+ Each ALI is a component of a campaign.
+ 
+ Therefore, the relation of tblAdvertiserLineItem to tblOrder is many-to-one, with the foriegn key relationship described below.
+ 
+ Use the sample data and schema descriptions below to provide the following queries:
+ 
+ QUERY_1)
+ Write an SQL query to return all months in the current year for which there are exactly 30 days.
+ 
+ Answer) select month(Date) as month from tblDimDate 
+ where DAY(LAST_DAY(DATE)) = 30;
+ 
+  QUERY_2)
+ tblDimDate should have one row (one date) for every date between the first date and the last date in the table. Write a SQL query to determine how many dates are missing, if
+ any, between the first date and last date. You do not need to supply a list of the missing dates.
+ 
+ Answer 2) 
+ WITH date_range AS (
+    SELECT MIN(TO_DATE(first_date, 'MM-DD-YYYY')) AS start_date,
+           MAX(TO_DATE(first_date, 'MM-DD-YYYY')) AS end_date
+    FROM tblDimDate
+)
+SELECT generate_series(start_date, end_date, '1 day'::interval) AS generated_date
+FROM date_range
+WHERE generated_date NOT IN (SELECT TO_DATE(first_date, 'MM-DD-YYYY') FROM tblDimDate)
+ORDER BY generated_date;
+ 
+  QUERY_3)
+ Write an SQL query to identify all orders scheduled to run in November 2023, for which there are not yet any records in tblAdvertiserLineItem.
+ 
+ Answer 3)
+ 
+ select ord.*
+ from
+ (select distinct order_id from tblOrder where month(order_date)=11 and year(order_date)=2023) ord
+ where ord.order_id not in 
+ (select distinct ali.order_id from ALI ali)
+ 
+ QUERY_4)
+ Write an SQL query to return the number of campaigns in tblOrder grouped by campaign duration.
+ Campaign duration would be the number of days between dateStart and dateEnd.
+ 
+ Answer 4) 
+           select count(distinct campaign_id) as no_of_campaigns,cmpn_dur
+		   from
+           (select campaign_id,datediff(dateEnd-dateStart) as cmpn_dur
+           from  tblOrder)
+		   group by cmpn_dur
+		   
+		   
+		   
+ 
+ 
+ ***Database Design
+ 
+ QUESTION_1)
+ Database design:
+ 
+ What are the advantages and disadvantages of creating and using normalized tables?
+ Advantages inlcude:
+ Elimination of data redundancy
+ Data would be more reliable
+ Easy to mainatain data model
+ Better scalability
+ 
+ Disadvantages inlcude:
+ Writing quesries can be complex as it may require more table interaction
+ There can be problem of performance overhead
+ Maintainance might require more expertise for any restructuring
+ 
+ 
+ 
+ 
+ What are the advantages and disadvantages of creating and using non-normalized tables?
+ Advantages inlcude:
+ Improved query performance
+ Easy to manage as it doesn't require deep expertise
+ Simpler queries to make use of the data model
+ Works best for analyticsla purpose where entier dataset in combined with all features
+ 
+ 
+ Disadvantages inlcude:
+ Data duplication can be problem
+ Results can be less reliable
+ Scalability can be a issue
+ 
+ 
+ 
+ ****Data Validation and Analysis
+ For a project, you are working with structured (tabular) text data which is expected to conform to a specified schema.
+ The schema defines the delimiters used to split data into fields, as well as the the name and data type of data for each field.
+ Can you describe or write a script or pipeline which will determine if a given input file is matching the schema?
+ If there are exceptions, the script should count the frequency of the exceptions, along with one or a few examples.
+ 
+ 
+ 
+ 
+ def actual_schema(schema_file):
+
+  
+    with open(schema_file, 'r') as file:
+        lines = file.readlines()
+
+    # Extract delimiter from the schema file
+    delimiter_line = [line for line in lines if line.startswith('DELIMITER=')]
+    if not delimiter_line:
+        raise ValueError("Schema file must specify a DELIMITER.")
+    delimiter = delimiter_line[0].strip().split('=')[1]
+
+    # Extract columns and their data types
+    columns = []
+    data_types = []
+    for line in lines:
+        if '=' in line or line.strip() == '':
+            continue
+        col, dtype = line.strip().split(':')
+        columns.append(col)
+        data_types.append(dtype)
+
+    return columns, data_types, delimiter
+	
+	
+	
+	
+	def validate_schema(data_file, schema_file):
+
+    columns, data_types, delimiter = parse_schema(schema_file)
+    errors = []
+
+    # Type checkers for validation
+    type_checkers = {
+        'str': str,
+        'int': lambda x: int(x),
+        'float': lambda x: float(x)
+        
+    }
+
+    with open(data_file, 'r') as file:
+        reader = csv.reader(file, delimiter=delimiter)
+        header = next(reader)
+
+        # Check if header matches schema columns
+        if header != columns:
+            errors.append(f"Header mismatch. Expected: {columns}, Found: {header}")
+            return False, errors
+
+        # Validate each row
+        for line_no, row in enumerate(reader, start=2):  # Start at line 2 (after header)
+            if len(row) != len(columns):
+                errors.append(f"Line {line_no}: Expected {len(columns)} fields, found {len(row)}")
+                continue
+
+            for index, (col_name, dtype) in enumerate(zip(columns, data_types)):
+                try:
+                    if dtype not in type_checkers:
+                        errors.append(f"Line {line_no}: Unsupported data type '{dtype}' for column '{col_name}'")
+                        continue
+                    type_checkers[dtype](row[index].strip())
+					
+                except (ValueError, TypeError):
+                    errors.append(
+                        f"Line {line_no}: Column '{col_name}' expected type '{dtype}', but got value '{row[index]}'"
+                    )
+
+    return len(errors) == 0, errors
+	
+	
+	if __name__ == "__main__":
+    # Paths to the schema and data files
+    schema_file = 'schema.txt'
+    data_file = 'data.csv'
+
+    is_valid, validation_errors = validate_file_against_schema(data_file, schema_file)
+
+    if is_valid:
+        print("The file matches the schema.")
+    else:
+        print("The file does not match the schema. Errors:")
+        for error in validation_errors:
+            print("  -", error)
+	
+	
+	***GBQ
+    QUESTION_1) Given a table in GBQ, how do we identify where the data is stored?
+	
+	Answer 1)
+	select
+    table_catalog,
+    table_schema,
+    table_name,
+    location
+    from
+    `region-us.INFORMATION_SCHEMA.TABLES`
+    where table_name = 'table_name';
+	
+	
+	
+	QUESTION_2) How can we see what partitions the table may have?
+	
+    Answer 2)	
+	select
+    partition_id,
+    partition_time,
+    row_count,
+    total_bytes
+    from
+    `your_project_id.your_dataset_id.INFORMATION_SCHEMA.PARTITIONS`
+    where table_name = 'table_name';
+	
+	
+	Given a table, 'auctions' with the following DDL:
+	
+ CREATE TABLE auctions (
+ auctionid string COMMENT 'the unique identifier for the auction',
+ idlineitem bigint COMMENT 'the Line Item ID associated with the auction',
+ arysegments array<string> COMMENT 'the array of segments associated with the auction',
+ exportdate DATE
+ )
+ partition by
+ date(exportdate) ;
+ 
+ What would be the queries to answer the following questions:
+ 
+QUERY_1) Provide a GBQ query to provide a distribution of the number of auctions and line items, grouped by the number of segments within each auction record.
+
+Answer 1) select  segments, 
+     exportdate,
+    count(distinct auctionid) AS auctions_count,
+	count(distinct idlineitem) AS line_items_count
+    from
+    `project_id.dataset_id.table_nm`, UNNEST(arysegments) as segments
+    group by segments,exportdate
+	order by segments,exportdate
+ 
+QUERY_2) Provide an GBQ query to provide the distinct count of auctions and line items, associated to each segment within arysegments.
+	
+Answer 2)	
+    select  segments, 
+    count(distinct auctionid) AS auctions_count,
+	count(distinct idlineitem) AS line_items_count
+    from
+    `project_id.dataset_id.table_nm`, UNNEST(arysegments) as segments
+    group by segments
+    
+
+ ***Linux, Bash
+ You need to run a sql query for a sequence of dates (all dates from last month).
+ The size of the table data and cluster bandwidth require that the query be run for each date individually.
+ The query string will accept 'DATE' as an argument, as follows:
+ SQL_QUERY="select utc_date, sum(1) as num_rows from my_table where utc_date = '${DATE}' group by utc_date"
+ Using bash, write a script which will execute this query for all dates from last month and store the result to a single file.
+ The file will have 2 columns and up to 31 rows.	
+
+Answer
+
+#!/bin/bash
+
+# Fetch the first and last dates of the previous month
+start_date=$(date -d "$(date +'%Y-%m-01') -1 month" +'%Y-%m-01')
+end_date=$(date -d "$start_date +1 month -1 day" +'%Y-%m-%d')
+
+# Initialize the current_date variable to the start_date
+curr_date=$start_date
+
+# Loop through all dates in the last month
+while [[ "$curr_date" < "$(date -d "$end_date +1 day" +'%Y-%m-%d')" ]];  
+  do
+  echo "Running query for date: $curr_date"
+ 
+  sql_query="select utc_date, sum(1) as num_rows from my_table where utc_date = '${curr_date}' group by utc_date"
+  
+  # Run the query using bq
+  bq query --use_legacy_sql=false "$sql_query"
+
+  # Increment the date by 1 day
+  curr_date=$(date -d "$curr_date +1 day" +'%Y-%m-%d')
+done
+	
+	
+	
+***Python
+ 
+ You need to run a hive query for a sequence of 30 dates (all dates from last month).
+The size of the table data and cluster bandwidth require that the query be run for each date individually.
+
+ The hive query will accept 'DATE' as an argument, as follows.
+ 
+ SQL_QUERY = f"select utc_date, sum(1) as num_rows from my_table where utc_date = '{DATE}' group by utc_date"
+ 
+ Using Python, write a script which will execute this query for all dates from last month and store the result to a single file.
+ The file will have 2 columns and up to 31 rows.
+
+
+Answer	
+import subprocess
+from datetime import datetime, timedelta
+
+def hive_query(date):
+    hive_query="select utc_date, sum(1) as num_rows from my_table where utc_date = '{DATE}' group by utc_date"
+# Run the Hive query using the subprocess module
+    result = subprocess.run(
+            ["hive", "-e", hive_query],  # `hive -e` to execute the query
+            capture_output=True,         # Capture stdout and stderr
+            text=True,                  # Ensure the output is in string format
+            check=True                  # Raise an error if the command fails
+            )
+
+    print(result.stdout)
+	
+	
+# Function to generate dates for the last month
+def last_month_dates():
+    # Get today's date
+    today = datetime.today()
+    # Get the first and 31st day of the last month
+    first_day_last_month = today.replace(day=1) - timedelta(days=1)
+    first_day_last_month = first_day_last_month.replace(day=1)
+	last_day_last_month=first_day_last_month + timedelta(days=30)
+    
+    # Generate the last 30 days (or all days of the previous month)
+    dates = []
+    curr_date = first_day_last_month
+    while curr_date <  last_day_last_month: 
+        dates.append(curr_date.strftime('%Y-%m-%d'))            
+    return dates
+
+# Main execution logic
+if __name__ == "__main__":
+    # Get all the dates from last month
+    last_month_dts = last_month_dates()
+
+    # Run the Hive query for each date in the last month
+    for date in last_month_dts:
+        hive_query(date)	
